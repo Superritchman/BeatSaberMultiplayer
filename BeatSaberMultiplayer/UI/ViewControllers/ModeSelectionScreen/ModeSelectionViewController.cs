@@ -56,43 +56,8 @@ namespace BeatSaberMultiplayerLite.UI.ViewControllers.ModeSelectionScreen
             if (firstActivation)
             {
                 _radioButton.interactable = false;
-                List<string> missingFiles = new List<string>();
-                foreach (string path in _dllPaths)
-                {
-                    if (!File.Exists(path))
-                    {
-                        _filesMising = true;
-                        missingFiles.Add(path);
-                    }
-                }
 
-                _missingFilesText.color = Color.red;
-
-                if (_filesMising)
-                {
-                    _missingFilesText.text = $"Missing files: {string.Join(", ", missingFiles)}";
-                    Plugin.log.Error($"Missing critical files for Multiplayer: {string.Join(", ", missingFiles)}");
-                    _missingFilesRect.gameObject.SetActive(true);
-                    _buttonsRect.gameObject.SetActive(false);
-                }
-                else
-                {
-                    _missingFilesRect.gameObject.SetActive(false);
-                    _buttonsRect.gameObject.SetActive(true);
-                }
-
-                //if (ModelSaberAPI.isCalculatingHashes)
-                //{
-                //    _buttonsRect.gameObject.SetActive(false);
-                //    _avatarsLoadingRect.gameObject.SetActive(true);
-                //    ModelSaberAPI.hashesCalculated += ModelSaberAPI_hashesCalculated;
-
-                //    _progressBarBG.color = new Color(1f, 1f, 1f, 0.2f);
-                //    _progressBarTop.color = new Color(1f, 1f, 1f, 1f);
-
-                //}
-                //else
-                    _avatarsLoadingRect.gameObject.SetActive(false);
+                _avatarsLoadingRect.gameObject.SetActive(false);
                 try
                 {
                     var pluginVersion = Plugin.PluginMetadata.Version.ToString();
