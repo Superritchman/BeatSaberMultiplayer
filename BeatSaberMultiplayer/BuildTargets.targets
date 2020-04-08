@@ -3,48 +3,46 @@
      and copying the plugin to to your Beat Saber folder. Only edit this if you know what you are doing. -->
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <BuildTargetsVersion>1.0</BuildTargetsVersion>
-    <BuildTargetsModified>true</BuildTargetsModified> <!--Set this to true if you edit this file to prevent automatic updates-->
+    <BuildTargetsVersion>1.2</BuildTargetsVersion>
+    <BuildTargetsModified>true</BuildTargetsModified>
+    <!--Set this to true if you edit this file to prevent automatic updates-->
   </PropertyGroup>
   <!--Build Targets-->
-  <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(NCrunch)' != '1'">
-    <Message Text="Copying $(OutputPath)$(AssemblyName).dll to IPA\Pending\Plugins folder" Importance="high" />
-    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFiles="$(BeatSaberDir)\IPA\Pending\Plugins\$(AssemblyName).dll" />
-    <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFiles="$(BeatSaberDir)\IPA\Pending\Plugins\$(AssemblyName).pdb" />
-  </Target>
-  <Target Name="ZipRelease" AfterTargets="Build" Condition="'$(NCrunch' != '1' AND '$(Configuration)' == 'Release'">
-    <Message Text="Zipping plugin for release." Importance="high" />
-    <GetCommitHash ProjectDir="$(ProjectDir)">
-      <Output TaskParameter="CommitShortHash" PropertyName="CommitShortHash" />
-    </GetCommitHash>
-    <!-- Set up directory to zip-->
-    <Delete Files="$(OutputPath)Final\Plugins\BeatSaberMultiplayerLite.dll" />
-    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFiles="$(OutputPath)Final\Plugins\$(AssemblyName).dll" />
-    <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFiles="$(OutputPath)Final\Plugins\$(AssemblyName).pdb" />
-
-    <GetManifestInfo ManifestName="manifest.json">
+  <Target Name="CheckManifest" AfterTargets="ILRepack" Condition="'$(DisableZipRelease)' == 'True'">
+    <GetManifestInfo ErrorOnMismatch="False">
       <Output TaskParameter="PluginVersion" PropertyName="PluginVersion" />
       <Output TaskParameter="GameVersion" PropertyName="GameVersion" />
       <Output TaskParameter="AssemblyVersion" PropertyName="AssemblyVersion" />
     </GetManifestInfo>
     <Message Text="PluginVersion: $(PluginVersion), AssemblyVersion: $(AssemblyVersion), GameVersion: $(GameVersion)" Importance="high" />
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'ReleaseDiscord|AnyCPU'">
-		  <ZipFile>$(AssemblyName)-$(PluginVersion)-DiscordCore-bs$(GameVersion)-$(CommitShortHash).zip</ZipFile>
-	  </PropertyGroup>
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
-      <ZipFile>$(AssemblyName)-$(PluginVersion)-bs$(GameVersion)-$(CommitShortHash).zip</ZipFile>
-    </PropertyGroup>
-    <ZipDir ZipFileName="$(OutDir)zip\$(ZipFile)" DirectoryName="$(OutputPath)Final" />
-    <Exec Command="del /F /Q &quot;$(ProjectDir)..\Output\Publish\BeatSaberMultiplayerLite*.zip&quot;"/>
-    <Copy SourceFiles="$(OutDir)zip\$(ZipFile)" DestinationFiles="$(ProjectDir)..\Output\Publish\$(ZipFile)" />
+  </Target>
+  <Target Name="ZipRelease" AfterTargets="ILRepack" Condition="'$(DisableZipRelease)' != 'True' AND '$(Configuration)' == 'Release'">
+    <Message Text="Zipping plugin for release." Importance="high" />
+    <GetCommitHash ProjectDir="$(ProjectDir)">
+      <Output TaskParameter="CommitShortHash" PropertyName="CommitShortHash" />
+    </GetCommitHash>
+    <GetManifestInfo ErrorOnMismatch="True">
+      <Output TaskParameter="PluginVersion" PropertyName="PluginVersion" />
+      <Output TaskParameter="GameVersion" PropertyName="GameVersion" />
+      <Output TaskParameter="AssemblyVersion" PropertyName="AssemblyVersion" />
+    </GetManifestInfo>
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFiles="$(OutputPath)Final\Plugins\$(AssemblyName).dll" />
+    <Message Text="PluginVersion: $(PluginVersion), AssemblyVersion: $(AssemblyVersion), GameVersion: $(GameVersion)" Importance="high" />
+    <ZipDir DirectoryName="$(OutputPath)Final" ZipFileName="$(OutDir)zip\$(AssemblyName)-$(PluginVersion)-bs$(GameVersion)-$(CommitShortHash).zip" />
+  </Target>
+  <Target Name="CopyToPlugins" AfterTargets="ILRepack" Condition="'$(DisableCopyToPlugins)' != 'True'">
+    <Error Text="Unable to copy assembly to game folder. BeatSaberDir doesn't exist: $(BeatSaberDir)" Condition="!Exists($(BeatSaberDir))"/>
+    <Message Text="Copying $(OutputPath)$(AssemblyName).dll to IPA\Pending\Plugins folder" Importance="high" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFiles="$(BeatSaberDir)\IPA\Pending\Plugins\$(AssemblyName).dll" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).pdb" DestinationFiles="$(BeatSaberDir)\IPA\Pending\Plugins\$(AssemblyName).pdb" />
   </Target>
   <!--Build Tasks-->
   <UsingTask TaskName="GetManifestInfo" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.v12.0.dll">
     <ParameterGroup>
-      <ManifestName ParameterType="System.String" Required="true" Output="false"/>
       <GameVersion ParameterType="System.String" Output="true" />
       <PluginVersion ParameterType="System.String" Output="true" />
       <AssemblyVersion ParameterType="System.String" Output="true" />
+      <ErrorOnMismatch ParameterType="System.Boolean" Required="false" />
     </ParameterGroup>
     <Task>
       <Reference Include="System.Runtime" />
@@ -56,8 +54,7 @@
         <![CDATA[
             try
             {
-                Log.LogMessage(MessageImportance.High, "Analyzing manifest: {0}", ManifestName);
-                string manifestFile = ManifestName;
+                string manifestFile = "manifest.json";
                 string assemblyFile = "Properties\\AssemblyInfo.cs";
                 string manifest_gameVerStart = "\"gameVersion\"";
                 string manifest_versionStart = "\"version\"";
@@ -105,6 +102,8 @@
                 {
                     Log.LogError("Build", "BSMOD04", "", manifestFile, 0, 0, 0, 0, "PluginVersion not found in manifest.json");
                     PluginVersion = "E.R.R";
+                    if(ErrorOnMismatch)
+                       return false;
                 }
 
                 if (!string.IsNullOrEmpty(manifest_gameVerLine))
@@ -115,6 +114,8 @@
                 {
                     Log.LogError("Build", "BSMOD05", "", manifestFile, 0, 0, 0, 0, "GameVersion not found in manifest.json");
                     GameVersion = "E.R.R";
+                    if(ErrorOnMismatch)
+                       return false;
                 }
 
                 line = null;
@@ -154,6 +155,8 @@
                 if (badParse)
                 {
                     Log.LogError("Build", "BSMOD03", "", assemblyFile, 0, 0, 0, 0, "Unable to parse the AssemblyVersion from {0}", assemblyFile);
+                    if(ErrorOnMismatch)
+                       return false;
                     badParse = false;
                 }
 
@@ -161,6 +164,8 @@
                 {
                     Log.LogError("Build", "BSMOD01", "", assemblyFile, startLine, startColumn + 1, startLine, endColumn + 1, "PluginVersion {0} in manifest.json does not match AssemblyVersion {1} in AssemblyInfo.cs", PluginVersion, AssemblyVersion, assemblyFile);
                     Log.LogMessage(MessageImportance.High, "PluginVersion {0} does not match AssemblyVersion {1}", PluginVersion, AssemblyVersion);
+                    if(ErrorOnMismatch)
+                       return false;
                 }
                 if (!string.IsNullOrEmpty(endLineStr))
                 {
@@ -170,30 +175,36 @@
                     {
                         assemblyFileVersion = endLineStr.Substring(startColumn, endColumn - startColumn);
                         if (AssemblyVersion != assemblyFileVersion)
+                        {
                             Log.LogWarning("Build", "BSMOD02", "", assemblyFile, endLine, startColumn + 1, endLine, endColumn + 1, "AssemblyVersion {0} does not match AssemblyFileVersion {1} in AssemblyInfo.cs", AssemblyVersion, assemblyFileVersion);
+                            if(ErrorOnMismatch)
+                               return false;
+                        }
 
                     }
                     else
                     {
                         Log.LogWarning("Build", "BSMOD06", "", assemblyFile, 0, 0, 0, 0, "Unable to parse the AssemblyFileVersion from {0}", assemblyFile);
+                        if(ErrorOnMismatch)
+                           return false;
                     }
                 }
                 return true;
             }
             catch (Exception ex)
             {
-                throw;
                 Log.LogErrorFromException(ex);
                 return false;
             }
-      ]]></Code>
+      ]]>
+      </Code>
     </Task>
   </UsingTask>
   <!-- Source: https://stackoverflow.com/a/38127938 -->
   <UsingTask TaskName="ZipDir" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.v12.0.dll">
     <ParameterGroup>
-      <ZipFileName ParameterType="System.String" Required="true" />
       <DirectoryName ParameterType="System.String" Required="true" />
+      <ZipFileName ParameterType="System.String" Required="true" />
     </ParameterGroup>
     <Task>
       <Reference Include="System.IO.Compression.FileSystem" />
@@ -202,7 +213,7 @@
       <Using Namespace="System.IO" />
       <Using Namespace="System.Threading" />
       <Code Type="Fragment" Language="cs">
-              <![CDATA[
+        <![CDATA[
         try
         {
           var zipDir = new DirectoryInfo(Path.GetDirectoryName(Path.GetFullPath(ZipFileName)));
@@ -230,7 +241,8 @@
           Log.LogErrorFromException(ex);
           return false;
         }
-      ]]></Code>
+      ]]>
+      </Code>
     </Task>
   </UsingTask>
   <UsingTask TaskName="GetCommitHash" TaskFactory="CodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.v12.0.dll">
@@ -240,8 +252,11 @@
     </ParameterGroup>
     <Task>
       <Using Namespace="System.Diagnostics" />
-      <Code Type="Fragment" Language="cs"><![CDATA[
+      <Using Namespace="System.ComponentModel" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
             CommitShortHash = "local";
+            bool noGitFound = false;
             try
             {
                 ProjectDir = Path.GetFullPath(ProjectDir);
@@ -252,18 +267,56 @@
                 process.StartInfo.WorkingDirectory = ProjectDir;
                 process.StartInfo.RedirectStandardOutput = true;
                 process.Start();
-                var outText = process.StandardOutput.ReadToEnd();
-                if(outText.Length >= 7)
-                  CommitShortHash = outText.Substring(0, 7);
-                else
-                  Log.LogMessage(MessageImportance.High, "Unable to retrieve current commit hash.");
-                return true;
+                string outText = process.StandardOutput.ReadToEnd();
+                if (outText.Length >= 7)
+                {
+                    CommitShortHash = outText.Substring(0, 7);
+                    return true;
+                }
+            }
+            catch (Win32Exception ex)
+            {
+                noGitFound = true;
+                
             }
             catch (Exception ex)
             {
                 Log.LogErrorFromException(ex);
                 return true;
             }
+            try
+            {
+                string gitPath = Path.GetFullPath(Path.Combine(ProjectDir, ".git"));
+                string headPath = Path.Combine(gitPath, "HEAD");
+                string headContents = null;
+                if (File.Exists(headPath))
+                    headContents = File.ReadAllText(headPath);
+                else
+                {
+                    gitPath = Path.GetFullPath(Path.Combine(ProjectDir, "..", ".git"));
+                    headPath = Path.Combine(gitPath, "HEAD");
+                    if (File.Exists(headPath))
+                        headContents = File.ReadAllText(headPath);
+                }
+                headPath = null;
+                if (!string.IsNullOrEmpty(headContents) && headContents.StartsWith("ref:"))
+                    headPath = Path.Combine(gitPath, headContents.Replace("ref:", "").Trim());
+                if (File.Exists(headPath))
+                {
+                    headContents = File.ReadAllText(headPath);
+                    if (headContents.Length >= 7)
+                        CommitShortHash = headContents.Substring(0, 7);
+                }
+            }
+            catch { }
+            if (CommitShortHash == "local")
+            {
+                if(noGitFound)
+                    Log.LogMessage(MessageImportance.High, "   'git' command not found, unable to retrieve current commit hash.");
+                else
+                    Log.LogMessage(MessageImportance.High, "   Unable to retrieve current commit hash.");
+            }
+            return true;
       ]]>
       </Code>
     </Task>
